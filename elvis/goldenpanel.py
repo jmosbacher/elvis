@@ -26,8 +26,15 @@ class GoldenPanel:
     Note that the Bokeh is automatically set to a corresponding theme. Changes
     can be made after constructing the object.
     """
+    CSS_THEMES = {LayoutTheme.LIGHT: ['goldenlayout-elvis-light.css',
+                                         'panel-customizations-light.css'],
+                      LayoutTheme.DARK: ['goldenlayout-elvis-dark.css',
+                                         'panel-customizations-dark.css']}
+    CSS_BASE = ['goldenlayout-base.css',
+                'goldenlayout-elvis.css',
+                'panel-customizations.css']
 
-    def __init__(self, title="Elvis", theme: LayoutTheme=LayoutTheme.DARK):
+    def __init__(self, title="Elvis", theme: LayoutTheme=LayoutTheme.DARK, css_dir="assets"):
         """
 
         :param theme: Choose between 'light' and 'dark'.
@@ -39,36 +46,45 @@ class GoldenPanel:
         self.panels = {}
         self.counter = 0
         self.app = None
+        self.css_dir = css_dir
         pn.extension()
         Bokeh.set_elvis_style(theme=theme)
 
-    def _set_assets(self, root: str, theme: LayoutTheme):
-        css_base = [root + 'goldenlayout-base.css',
-                    root + 'goldenlayout-elvis.css',
-                    root + 'panel-customizations.css']
-        css_theme = {LayoutTheme.LIGHT: [root + 'goldenlayout-elvis-light.css',
-                                         root + 'panel-customizations-light.css'],
-                      LayoutTheme.DARK: [root + 'goldenlayout-elvis-dark.css',
-                                         root + 'panel-customizations-dark.css']}
-        js_files = {'jquery': root + 'js\jquery-1.11.1.min.js',
-                    'goldenlayout': root + 'js\goldenlayout.min.js'}
-        css_files = css_base + css_theme[theme]
-        pn.config.js_files =  js_files
-        pn.config.css_files = css_files
+    def load_css(self, paths):
+        css = ""
+        for path in paths:
+            with open(path, "r") as f:
+                css += "\n".join(f.readlines())
+        return css
+
+    def _set_assets(self, assets_dir: str, theme: LayoutTheme):
+        assets_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), os.pardir, assets_dir))
+        js_files = {'jquery': 'https://code.jquery.com/jquery-1.11.1.min.js',
+                    'goldenlayout': 'https://golden-layout.com/files/latest/js/goldenlayout.min.js'}
+        css_files = ['https://golden-layout.com/files/latest/css/goldenlayout-base.css',
+                    'https://golden-layout.com/files/latest/css/goldenlayout-dark-theme.css']
+
+        css_paths = [os.path.join(assets_path, fname) for fname in self.CSS_BASE + self.CSS_THEMES[theme]]
+        css = self.load_css(css_paths)
+
+        pn.extension('bokeh', js_files=js_files, raw_css=[css], css_files=css_files)
 
     def serve(self, static_dirs=None, **kwargs):
         """ Wrapper for pn.serve, with the inclusion of the required static assets."""
         static_dirs = {} if static_dirs is None else static_dirs
-        assets_elvis = {'assets': os.path.abspath(
-            os.path.join(os.path.dirname(__file__), os.pardir, 'assets'))}
         kwargs.setdefault('title', self.title)
-        self._set_assets("assets\\", self.theme)
-        return pn.serve(self.app, static_dirs={**assets_elvis, **static_dirs}, **kwargs)
+        self._set_assets(self.css_dir, self.theme)
+        return pn.serve(self.app, static_dirs={**static_dirs}, **kwargs)
 
     def servable(self, root="elvis") -> None:
         """ Wrapper for servable, with the inclusion of the required static assets."""
-        self._set_assets(root + "\\static\\", self.theme)
+        self._set_assets(self.css_dir, self.theme)
         self.app.servable(title=self.title)
+
+    def panel(self):
+        self._set_assets(self.css_dir, self.theme)
+        return self.app
 
     def compose(self, golden_layout: str) -> None:
         """
